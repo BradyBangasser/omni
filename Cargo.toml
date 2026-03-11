@@ -1,0 +1,7 @@
+[workspace]
+members = [
+    "core",
+    "router",
+    "compiler",
+]
+resolver = "2"

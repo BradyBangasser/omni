@@ -1,0 +1,10 @@
+[package]
+name = "compiler"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+im = "15.1.0"
+tree-sitter = "0.26.6"
+tree-sitter-go = "0.25.0"
+core = { path = "../core" }
