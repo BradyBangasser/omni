@@ -1,12 +1,14 @@
 use std::{collections::VecDeque, error::Error, path::Path};
 
+use log::{debug, info};
+
 use crate::{
     ctx::OmnicomCtx,
-    route::{Node, Route, RouteSeg},
+    router::{Node, Route, RouteSeg},
 };
 
 pub fn walk_routes(ctx: &OmnicomCtx, path: &Path) -> Result<im::Vector<Route>, Box<dyn Error>> {
-    println!("HERE");
+    info!("Walking {} for routes", path.display());
     let mut rv = im::Vector::new();
 
     if path.is_dir() {
@@ -33,7 +35,6 @@ fn _walk_routes_r(
             dirq.push_front(p);
         } else {
             let n = Node::from_file(&p);
-            println!("{}", p.display());
 
             if n.is_err() {
                 println!("Error parsing potential endpoint {}", p.display());
@@ -46,7 +47,7 @@ fn _walk_routes_r(
                         println!("Adding middleware '{}'", mw.file.display());
                         midq.push_back(n);
                     }
-                    Node::Endpoint(_) => {
+                    Node::Endpoint(_, _) => {
                         rq.push_back(n);
                     }
                 }
@@ -55,7 +56,7 @@ fn _walk_routes_r(
     }
 
     while let Some(route) = rq.pop_front() {
-        rv.push_back(Route::new(parent.clone(), route, midq.clone()))
+        rv.push_back(Route::new(parent.clone(), route, midq.clone())?)
     }
 
     while let Some(dir) = dirq.pop_front() {
@@ -76,7 +77,7 @@ fn _walk_routes_r(
             _ctx,
             &dir,
             pclone,
-            rv.clone(),
+            im::Vector::new(),
             midq.clone(),
         )?);
     }

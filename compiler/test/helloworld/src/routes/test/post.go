@@ -3,6 +3,6 @@ package routes
 
 type OmniContext struct{}
 
-func GET(hi OmniContext) string {
+func POST(hi OmniContext) string {
 	return "Hello World"
 }

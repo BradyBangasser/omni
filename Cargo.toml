@@ -1,7 +1,3 @@
 [workspace]
-members = [
-    "core",
-    "router",
-    "compiler",
-]
+members = ["base", "router", "compiler"]
 resolver = "2"

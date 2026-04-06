@@ -1,4 +1,7 @@
-#[derive(Clone, Debug, PartialEq)]
+use log::trace;
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[repr(u8)]
 pub enum Method {
     GET,
     POST,
@@ -15,6 +18,7 @@ pub enum Method {
 
 impl Method {
     pub fn parse(method: &str) -> Option<Self> {
+        trace!("Parsing method: {}", method);
         match method.to_uppercase().as_str() {
             "GET" => Some(Method::GET),
             "POST" => Some(Method::POST),
