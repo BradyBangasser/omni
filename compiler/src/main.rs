@@ -1,5 +1,7 @@
 mod ast;
+mod build;
 mod ctx;
+mod languages;
 mod router;
 mod treemap;
 
@@ -26,8 +28,10 @@ fn main() {
 
     let mut tree = ConditionTree::new(routes);
     // tree.run_pass_type::<pass::segcount::Segcount>();
-    tree.run_pass_type::<pass::method::Method>();
+    // tree.run_pass_type::<pass::method::Method>();
     tree.run_pass_type::<pass::length::Length>();
+
+    tree.print_tree();
 
     Generator::new(tree, stdout()).default_to::<generate::format::rs::Format>();
 }

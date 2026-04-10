@@ -1,3 +1,5 @@
+use log::{debug, info};
+
 use crate::router::{
     Route,
     tree::{
@@ -21,12 +23,14 @@ impl Length {
         let mut partitions: im::Vector<(ConditionType, im::Vector<Route>)> = im::Vector::new();
 
         while let Some(r) = routes.pop_front() {
+            debug!("{:#?}", r);
             if let Some(existing) = partitions
                 .iter_mut()
                 .find(|x| x.0 == ConditionType::Length(r.get_path_str().len()))
             {
                 existing.1.push_back(r);
             } else {
+                info!("adding {}", r.get_path_str().len());
                 let m = ConditionType::Length(r.get_path_str().len());
                 let mut v = im::Vector::new();
                 v.push_back(r);

@@ -1,4 +1,5 @@
 use base::types::http;
+use im::{HashSet, Vector};
 use ptree::TreeBuilder;
 use std::{error::Error, sync::Arc};
 use strum::IntoStaticStr;
@@ -6,7 +7,7 @@ use strum::IntoStaticStr;
 use log::info;
 
 use crate::router::{
-    generate::{Generator, format::rs::Format},
+    generate::{Generator, format::rs::Format, indent_fn},
     tree::{Route, pass::Pass},
 };
 
@@ -19,11 +20,12 @@ pub trait CustomCondition: std::fmt::Debug + Send + Sync {
         nodes: &im::Vector<ConditionNode>,
     ) -> CodeGenRetType;
 }
+
 type CodeGenRetType = Result<usize, Box<dyn Error>>;
+
 #[derive(Debug, Clone, IntoStaticStr)]
 pub enum ConditionType {
     SegmentCount(usize),
-    Method(http::Method),
     Length(usize),
     Prefix(String),
     Custom(Arc<dyn CustomCondition>),
@@ -33,44 +35,15 @@ impl PartialEq for ConditionType {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::SegmentCount(a), Self::SegmentCount(b)) => a == b,
-            (Self::Method(a), Self::Method(b)) => a == b,
             (Self::Prefix(a), Self::Prefix(b)) => a == b,
             (Self::Custom(a), Self::Custom(b)) => std::sync::Arc::ptr_eq(a, b),
+            (Self::Length(a), Self::Length(b)) => a == b,
             _ => false,
         }
     }
 }
 
 impl ConditionType {
-    fn _gen_method_code<T: std::io::Write>(
-        writer: &mut T,
-        mut indent: usize,
-        nodes: &im::Vector<ConditionNode>,
-    ) -> CodeGenRetType {
-        Generator::indent(indent, writer)?;
-        writeln!(writer, "match method {{").unwrap();
-        indent += 1;
-
-        for n in nodes {
-            if let ConditionType::Method(m) = &n.condition {
-                Generator::indent(indent, writer)?;
-                writeln!(writer, "{} => {{", m.clone() as u8)?;
-
-                Format::format_r(writer, indent + 1, &n.stored_routes, &n.children);
-                Generator::indent(indent, writer)?;
-                writeln!(writer, "}},")?;
-            }
-        }
-        Generator::indent(indent, writer)?;
-        writeln!(writer, "_ => {{}}")?;
-        indent -= 1;
-
-        Generator::indent(indent, writer)?;
-        writeln!(writer, "}}")?;
-
-        Ok(indent)
-    }
-
     fn _gen_prefix_code(
         writer: &mut dyn std::io::Write,
         indent: usize,
@@ -79,12 +52,36 @@ impl ConditionType {
         todo!();
     }
 
-    fn _gen_length_code(
-        writer: &mut dyn std::io::Write,
-        indent: usize,
+    fn _gen_length_code<T: std::io::Write>(
+        writer: &mut T,
+        mut indent: usize,
         nodes: &im::Vector<ConditionNode>,
     ) -> CodeGenRetType {
-        todo!()
+        indent_fn(indent, writer)?;
+        writeln!(writer, "let l = route.len();")?;
+        indent_fn(indent, writer)?;
+        writeln!(writer, "match l {{")?;
+        indent += 1;
+
+        for n in nodes {
+            if let ConditionType::Length(l) = &n.condition {
+                indent_fn(indent, writer)?;
+                writeln!(writer, "{} => {{", l)?;
+
+                Format::format_r(writer, indent + 1, &n.stored_routes, &n.children);
+                indent_fn(indent, writer)?;
+                writeln!(writer, "}},")?;
+            }
+        }
+
+        indent_fn(indent, writer)?;
+        writeln!(writer, "_ => {{}}")?;
+        indent -= 1;
+
+        indent_fn(indent, writer)?;
+        writeln!(writer, "}}")?;
+
+        Ok(indent)
     }
 
     fn _gen_segcount_code(
@@ -116,7 +113,6 @@ impl ConditionType {
             Self::SegmentCount(_) => Self::_gen_segcount_code(writer, indent, nodes),
             Self::Prefix(_) => Self::_gen_prefix_code(writer, indent, nodes),
             Self::Length(_) => Self::_gen_length_code(writer, indent, nodes),
-            Self::Method(_) => Self::_gen_method_code(writer, indent, nodes),
             Self::Custom(c) => c.gen_code(writer, indent, nodes),
             // _ => Err("Condition Undefined".into()),
         }
@@ -220,6 +216,7 @@ impl ConditionTree {
         node: &mut ConditionNode,
         partition_fn: &PartitionFn,
     ) {
+        todo!();
     }
 
     pub fn insert_root_condition(&mut self, pass: &mut dyn Pass, partition_fn: PartitionFn) {

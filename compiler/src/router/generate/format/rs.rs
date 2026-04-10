@@ -1,7 +1,7 @@
 use crate::router::{
     Route,
-    generate::{Generator, GeneratorFormat},
-    tree::condition::{ConditionNode, ConditionType},
+    generate::{Generator, GeneratorFormat, indent_fn},
+    tree::condition::ConditionNode,
 };
 
 #[derive(Default, Debug)]
@@ -17,22 +17,22 @@ impl Format {
         // Match child routes
         let routes_empty = routes.is_empty();
         if !routes_empty {
-            Generator::indent(indent, writer).unwrap();
+            indent_fn(indent, writer).unwrap();
             writeln!(writer, "match route {{").unwrap();
             indent += 1;
 
             for r in routes {
-                Generator::indent(indent, writer).unwrap();
+                indent_fn(indent, writer).unwrap();
                 writeln!(writer, "b\"{}\" => {{}},", r.get_path_str()).unwrap();
             }
 
-            Generator::indent(indent, writer).unwrap();
+            indent_fn(indent, writer).unwrap();
             writeln!(writer, "_ => {{}},").unwrap();
         }
 
         if !children.is_empty() {
             if !routes_empty {
-                Generator::indent(indent, writer).unwrap();
+                indent_fn(indent, writer).unwrap();
                 writeln!(writer, "_ => {{").unwrap();
                 indent += 1;
             }
@@ -52,7 +52,7 @@ impl Format {
 
         if !routes_empty {
             indent -= 1;
-            Generator::indent(indent, writer).unwrap();
+            indent_fn(indent, writer).unwrap();
             writeln!(writer, "}}").unwrap();
         }
     }
@@ -75,7 +75,7 @@ impl GeneratorFormat for Format {
         );
 
         g.indent -= 1;
-        Generator::indent(g.indent, &mut g.writer).unwrap();
+        indent_fn(g.indent, &mut g.writer).unwrap();
         writeln!(g.writer, "}}").unwrap();
     }
 }

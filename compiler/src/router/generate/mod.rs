@@ -1,10 +1,16 @@
 pub mod format;
+pub mod stack;
+pub mod tree;
 
 use std::fmt::Debug;
 
 use log::trace;
 
 use crate::router::tree::condition::ConditionTree;
+
+pub fn indent_fn<W: ?Sized + std::io::Write>(indent: usize, writer: &mut W) -> std::io::Result<()> {
+    write!(writer, "{:width$}", "", width = indent * 4)
+}
 
 pub struct Generator<T> {
     pub indent: usize,
@@ -24,10 +30,6 @@ impl<T: std::io::Write> Generator<T> {
             tree,
             writer,
         }
-    }
-
-    pub fn indent(indent: usize, writer: &mut T) -> std::io::Result<()> {
-        write!(writer, "{:width$}", "", width = indent * 4)
     }
 
     pub fn default_to<F>(&mut self)

@@ -7,6 +7,7 @@ use std::{
     error::Error,
     fmt, fs,
     path::{Path, PathBuf},
+    str::FromStr,
 };
 
 use base::types::http::Method;
@@ -49,7 +50,7 @@ pub enum Node {
 impl Node {
     pub fn from_file(p: &Path) -> Result<im::Vector<Node>, Box<dyn Error>> {
         info!("Parsing routes from {}", p.display());
-        let file_method = Method::parse(
+        let file_method = Method::from_str(
             p.file_stem()
                 .and_then(|name| name.to_str())
                 .unwrap_or_default(),
@@ -85,7 +86,7 @@ impl Node {
             };
 
             nd.fname = f.name.clone();
-            if let Some(m) = Method::parse(&f.name) {
+            if let Ok(m) = Method::from_str(&f.name) {
                 // it's an endpoint
                 trace!(
                     "Viable {:?} (function name) endpoint: {}:{}",
@@ -94,7 +95,7 @@ impl Node {
                     f.name
                 );
                 nv.push_back(Self::Endpoint(nd, m));
-            } else if let Some(m) = file_method.clone() {
+            } else if let Ok(m) = file_method.clone() {
                 // it's an endpoint, do the same as before
                 trace!(
                     "Viable {:?} (file name) endpoint: {}:{}",
@@ -111,6 +112,13 @@ impl Node {
         }
 
         Ok(nv)
+    }
+
+    pub fn get_src_path(&self) -> &Path {
+        match self {
+            Node::Endpoint(d, _) => &d.file,
+            Node::Middleware(d) => &d.file,
+        }
     }
 }
 
