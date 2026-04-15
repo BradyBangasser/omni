@@ -1,4 +1,4 @@
-use log::{debug, info};
+use log::info;
 
 use crate::router::{
     Route,
@@ -8,22 +8,18 @@ use crate::router::{
     },
 };
 
-#[const_env::env_item]
-const METHOD_PASS_N_ROUTE_THRESHOLD: usize = 8;
-
 #[derive(Debug, Default)]
 pub struct Length;
 
 impl Length {
     fn partition(
-        pass: &mut dyn Pass,
+        _pass: &mut dyn Pass,
         routes: im::Vector<Route>,
     ) -> im::Vector<(ConditionType, im::Vector<Route>)> {
         let mut routes = routes.clone();
         let mut partitions: im::Vector<(ConditionType, im::Vector<Route>)> = im::Vector::new();
 
         while let Some(r) = routes.pop_front() {
-            debug!("{:#?}", r);
             if let Some(existing) = partitions
                 .iter_mut()
                 .find(|x| x.0 == ConditionType::Length(r.get_path_str().len()))

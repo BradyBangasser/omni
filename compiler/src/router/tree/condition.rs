@@ -1,15 +1,10 @@
-use base::types::http;
-use im::{HashSet, Vector};
 use ptree::TreeBuilder;
 use std::{error::Error, sync::Arc};
 use strum::IntoStaticStr;
 
 use log::info;
 
-use crate::router::{
-    generate::{Generator, format::rs::Format, indent_fn},
-    tree::{Route, pass::Pass},
-};
+use crate::router::tree::{Route, pass::Pass};
 
 pub trait CustomCondition: std::fmt::Debug + Send + Sync {
     fn get_type(&self) -> &'static str;
@@ -44,77 +39,10 @@ impl PartialEq for ConditionType {
 }
 
 impl ConditionType {
-    fn _gen_prefix_code(
-        writer: &mut dyn std::io::Write,
-        indent: usize,
-        nodes: &im::Vector<ConditionNode>,
-    ) -> CodeGenRetType {
-        todo!();
-    }
-
-    fn _gen_length_code<T: std::io::Write>(
-        writer: &mut T,
-        mut indent: usize,
-        nodes: &im::Vector<ConditionNode>,
-    ) -> CodeGenRetType {
-        indent_fn(indent, writer)?;
-        writeln!(writer, "let l = route.len();")?;
-        indent_fn(indent, writer)?;
-        writeln!(writer, "match l {{")?;
-        indent += 1;
-
-        for n in nodes {
-            if let ConditionType::Length(l) = &n.condition {
-                indent_fn(indent, writer)?;
-                writeln!(writer, "{} => {{", l)?;
-
-                Format::format_r(writer, indent + 1, &n.stored_routes, &n.children);
-                indent_fn(indent, writer)?;
-                writeln!(writer, "}},")?;
-            }
-        }
-
-        indent_fn(indent, writer)?;
-        writeln!(writer, "_ => {{}}")?;
-        indent -= 1;
-
-        indent_fn(indent, writer)?;
-        writeln!(writer, "}}")?;
-
-        Ok(indent)
-    }
-
-    fn _gen_segcount_code(
-        writer: &mut dyn std::io::Write,
-        indent: usize,
-        nodes: &im::Vector<ConditionNode>,
-    ) -> CodeGenRetType {
-        todo!();
-    }
-
     pub fn get_type(&self) -> &'static str {
         match self {
             Self::Custom(cc) => cc.get_type(),
             _ => self.into(),
-        }
-    }
-
-    pub fn gen_code<T: std::io::Write>(
-        &self,
-        nodes: &im::Vector<ConditionNode>,
-        indent: usize,
-        writer: &mut T,
-    ) -> CodeGenRetType {
-        if nodes.is_empty() {
-            return Err("No Nodes generate code for".into());
-        }
-
-        match self {
-            Self::SegmentCount(_) => Self::_gen_segcount_code(writer, indent, nodes),
-            Self::Prefix(_) => Self::_gen_prefix_code(writer, indent, nodes),
-            Self::Length(_) => Self::_gen_length_code(writer, indent, nodes),
-            Self::Custom(c) => c.gen_code(writer, indent, nodes),
-            // _ => Err("Condition Undefined".into()),
         }
     }
 }

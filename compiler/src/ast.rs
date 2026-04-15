@@ -6,7 +6,7 @@ pub fn parse(src: &str) -> Result<Tree, Box<dyn Error>> {
 
     parser.set_language(&tree_sitter_go::LANGUAGE.into())?;
 
-    let tree = parser.parse(&src, None).unwrap();
+    let tree = parser.parse(src, None).unwrap();
 
     Ok(tree)
 }

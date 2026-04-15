@@ -2,8 +2,8 @@ pub mod generate;
 pub mod pass;
 pub mod tree;
 
+use bitflags::bitflags;
 use std::{
-    collections::LinkedList,
     error::Error,
     fmt, fs,
     path::{Path, PathBuf},
@@ -11,7 +11,6 @@ use std::{
 };
 
 use base::types::http::Method;
-
 use log::{info, trace};
 use tree_sitter::Tree;
 
@@ -32,13 +31,26 @@ impl fmt::Display for RouteSeg {
     }
 }
 
-pub enum Flags {
-    DB = 0x01,
-    Ctx = 0x02,
-    Hdr = 0x04,
-    Bdy = 0x08,
-    Dyn = 0x10,
-    Hot = 0x20,
+bitflags! {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    pub struct RouteFlags: u64 {
+        const DB  = 0x01;
+        const Ctx = 0x02;
+        const Hdr = 0x04;
+        const Bdy = 0x08;
+        const Dyn = 0x10;
+        const Hot = 0x20;
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct NodeDatum {
+    pub file: PathBuf,
+    pub fname: String,
+    pub params: Vec<(String, String)>,
+    pub ret: Vec<String>,
+    pub ruflags: RouteFlags,
+    pub ast: Tree,
 }
 
 #[derive(Debug, Clone)]
@@ -47,7 +59,50 @@ pub enum Node {
     Middleware(NodeDatum),
 }
 
+// --- NEW GETTERS ADDED HERE ---
 impl Node {
+    pub fn get_src_path(&self) -> &Path {
+        match self {
+            Node::Endpoint(d, _) | Node::Middleware(d) => &d.file,
+        }
+    }
+
+    pub fn get_name(&self) -> &str {
+        match self {
+            Node::Endpoint(d, _) | Node::Middleware(d) => &d.fname,
+        }
+    }
+
+    pub fn get_params(&self) -> &[(String, String)] {
+        match self {
+            Node::Endpoint(d, _) | Node::Middleware(d) => &d.params,
+        }
+    }
+
+    pub fn get_returns(&self) -> &[String] {
+        match self {
+            Node::Endpoint(d, _) | Node::Middleware(d) => &d.ret,
+        }
+    }
+
+    pub fn get_flags(&self) -> RouteFlags {
+        match self {
+            Node::Endpoint(d, _) | Node::Middleware(d) => d.ruflags,
+        }
+    }
+
+    pub fn is_middleware(&self) -> bool {
+        matches!(self, Node::Middleware(_))
+    }
+
+    pub fn get_method(&self) -> Option<&Method> {
+        match self {
+            Node::Endpoint(_, m) => Some(m),
+            Node::Middleware(_) => None,
+        }
+    }
+    // ------------------------------
+
     pub fn from_file(p: &Path) -> Result<im::Vector<Node>, Box<dyn Error>> {
         info!("Parsing routes from {}", p.display());
         let file_method = Method::from_str(
@@ -57,18 +112,15 @@ impl Node {
         );
 
         let mut nv = im::Vector::new();
-
         let src = fs::read_to_string(p)?;
-
         let tree = ast::parse(&src)?;
-
         let dfuncs = ast::discover_functions(&tree, &src)?;
 
         for f in dfuncs {
             trace!("Discovered possible endpoint, {}:{}", p.display(), f.name);
             let params = get_func_params(f.declaration, &src);
 
-            if params[0] != "OmniContext" {
+            if params.is_empty() || params[0] != "OmniContext" {
                 println!(
                     "{} is not a valid handler (Doesn't take OmniContext)",
                     f.name
@@ -78,16 +130,14 @@ impl Node {
 
             let mut nd = NodeDatum {
                 file: PathBuf::from(p),
-                fname: String::from(""),
-                params: LinkedList::new(),
-                ret: LinkedList::new(),
-                ruflags: 0,
-                ast: tree.clone(), // Maybe use reference counted datatype
+                fname: f.name.clone(),
+                params: Vec::new(),
+                ret: Vec::new(),
+                ruflags: RouteFlags::empty(),
+                ast: tree.clone(),
             };
 
-            nd.fname = f.name.clone();
             if let Ok(m) = Method::from_str(&f.name) {
-                // it's an endpoint
                 trace!(
                     "Viable {:?} (function name) endpoint: {}:{}",
                     m,
@@ -96,7 +146,6 @@ impl Node {
                 );
                 nv.push_back(Self::Endpoint(nd, m));
             } else if let Ok(m) = file_method.clone() {
-                // it's an endpoint, do the same as before
                 trace!(
                     "Viable {:?} (file name) endpoint: {}:{}",
                     m,
@@ -105,7 +154,6 @@ impl Node {
                 );
                 nv.push_back(Self::Endpoint(nd, m));
             } else {
-                // It's a middleware function
                 trace!("Viable middleware: {}:{}", p.display(), f.name);
                 nv.push_back(Self::Middleware(nd));
             }
@@ -114,22 +162,12 @@ impl Node {
         Ok(nv)
     }
 
-    pub fn get_src_path(&self) -> &Path {
+    pub fn to_str(&self) -> String {
         match self {
-            Node::Endpoint(d, _) => &d.file,
-            Node::Middleware(d) => &d.file,
+            Node::Endpoint(nd, m) => format!("ENDPOINT   [{:<6}] -> {}", m, nd.file.display()),
+            Node::Middleware(nd) => format!("MIDDLEWARE [ANY   ] -> {}", nd.file.display()),
         }
     }
-}
-
-#[derive(Debug, Clone)]
-pub struct NodeDatum {
-    pub file: PathBuf,
-    pub fname: String,
-    pub params: LinkedList<(String, String)>,
-    pub ret: LinkedList<String>,
-    pub ruflags: u64, // Usage flags from the current module flag struct
-    pub ast: Tree,
 }
 
 #[derive(Debug, Clone)]
@@ -153,22 +191,14 @@ impl Route {
             };
 
             r.chain.push_back(ep);
-
             Ok(r)
         } else {
-            Err("".into())
+            Err("Provided Node is not an Endpoint".into())
         }
     }
 
     pub fn get_path_str(&self) -> String {
-        let mut r: String = self
-            .path
-            .iter()
-            .map(|x| match x {
-                RouteSeg::Dynamic(s) => String::from("/") + &s.clone(),
-                RouteSeg::Static(s) => String::from("/") + &s.clone(),
-            })
-            .collect();
+        let mut r: String = self.path.iter().map(|seg| format!("/{}", seg)).collect();
 
         if r.is_empty() {
             r.push('/');

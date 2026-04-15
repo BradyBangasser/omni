@@ -1,55 +1,77 @@
-use bimap::BiHashMap;
+use std::error::Error;
+use ulid::Ulid;
+
+use sha3::{Digest, Sha3_256};
 
 use crate::{
-    languages::adapter::Adapter,
-    router::{
-        Node,
-        generate::{Generator, indent_fn},
-    },
+    languages::adapter::{Adapter, AdapterEmit, AdapterStackCtx, InAdapter},
+    router::{Node, generate::indent_fn},
 };
 
+#[derive(Default)]
 pub struct GoAdapter {}
 
-impl Adapter for GoAdapter {
-    fn get_flags(&self) -> u8 {
-        0
-    }
-
-    fn handles(&self, p: &std::path::Path) -> bool {
-        true
-    }
-
-    fn configure_build(
-        &mut self,
-        ctx: &mut crate::ctx::OmnicomCtx,
-        builder: &mut crate::build::OmniBuilder,
-    ) {
-    }
-
+impl InAdapter for GoAdapter {
+    // Generates rust stack
     fn emit(
         &mut self,
-        ctx: &mut crate::ctx::OmnicomCtx,
+        _ctx: &mut crate::ctx::OmnicomCtx,
         writer: &mut dyn std::io::Write,
+        actx: &mut AdapterStackCtx,
         mut indent: usize,
-        vars: &mut BiHashMap<String, String>,
         n: &crate::router::Node,
-    ) -> Result<usize, Box<dyn std::error::Error>> {
+    ) -> Result<(usize, AdapterEmit), Box<dyn std::error::Error>> {
         let nd = match n {
             Node::Endpoint(nd, _) => nd,
             Node::Middleware(nd) => nd,
         };
 
-        indent_fn(indent, writer)?;
-        writeln!(writer, "unsafe {{")?;
+        let mut hasher = Sha3_256::default();
+        hasher.update(n.get_src_path().to_str().unwrap().as_bytes());
+
+        let mut write_row = |indent: usize, text: &str| -> Result<(), Box<dyn Error>> {
+            indent_fn(indent, writer)?;
+            hasher.update(text.as_bytes());
+            writeln!(writer, "{}", text)?;
+            Ok(())
+        };
+
+        write_row(indent, "unsafe {")?;
         indent += 1;
 
-        indent_fn(indent, writer)?;
-        writeln!(writer, "let res = {}();", nd.fname)?;
+        let handle = format!("{}_{}_{}", "PACKAGE_NAME_HERE", nd.fname, Ulid::new());
+
+        write_row(indent, &format!("let res = {}();", handle))?;
+        actx.ffi.push(handle);
 
         indent -= 1;
-        indent_fn(indent, writer)?;
-        writeln!(writer, "}}")?;
 
-        Ok(indent)
+        write_row(indent, "}")?;
+
+        Ok((
+            indent,
+            AdapterEmit::new("1".into(), hasher.finalize().to_vec()),
+        ))
+    }
+
+    fn handles(&self, p: &std::path::Path) -> bool {
+        true
+    }
+}
+
+impl Adapter for GoAdapter {
+    fn get_name(&self) -> &str {
+        "GoAdapter"
+    }
+
+    fn get_flags(&self) -> u8 {
+        0
+    }
+
+    fn configure_build(
+        &mut self,
+        _ctx: &mut crate::ctx::OmnicomCtx,
+        _builder: &mut crate::build::OmniBuilder,
+    ) {
     }
 }

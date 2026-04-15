@@ -6,9 +6,6 @@ use crate::router::{
     },
 };
 
-#[const_env::env_item]
-const METHOD_PASS_N_ROUTE_THRESHOLD: usize = 8;
-
 #[derive(Debug, Default)]
 pub struct Segcount;
 

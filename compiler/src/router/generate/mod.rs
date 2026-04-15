@@ -1,4 +1,3 @@
-pub mod format;
 pub mod stack;
 pub mod tree;
 
@@ -6,7 +5,7 @@ use std::fmt::Debug;
 
 use log::trace;
 
-use crate::router::tree::condition::ConditionTree;
+use crate::router::generate::tree::GenTree;
 
 pub fn indent_fn<W: ?Sized + std::io::Write>(indent: usize, writer: &mut W) -> std::io::Result<()> {
     write!(writer, "{:width$}", "", width = indent * 4)
@@ -14,7 +13,7 @@ pub fn indent_fn<W: ?Sized + std::io::Write>(indent: usize, writer: &mut W) -> s
 
 pub struct Generator<T> {
     pub indent: usize,
-    pub tree: ConditionTree,
+    pub tree: GenTree,
     pub writer: T,
 }
 
@@ -23,7 +22,7 @@ pub trait GeneratorFormat: Debug {
 }
 
 impl<T: std::io::Write> Generator<T> {
-    pub fn new(tree: ConditionTree, writer: T) -> Generator<T> {
+    pub fn new(tree: GenTree, writer: T) -> Generator<T> {
         trace!("Creating new generator");
         Generator {
             indent: 0,
