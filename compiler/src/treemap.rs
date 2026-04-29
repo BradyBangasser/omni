@@ -1,6 +1,6 @@
 use std::{collections::VecDeque, error::Error, path::Path};
 
-use log::{debug, info};
+use log::{error, info, trace};
 
 use crate::{
     ctx::OmnicomCtx,
@@ -37,14 +37,14 @@ fn _walk_routes_r(
             let n = Node::from_file(&p);
 
             if n.is_err() {
-                println!("Error parsing potential endpoint {}", p.display());
+                error!("Error parsing potential endpoint {}", p.display());
                 continue;
             }
 
             for n in n? {
                 match &n {
                     Node::Middleware(mw) => {
-                        println!("Adding middleware '{}'", mw.file.display());
+                        trace!("Adding middleware '{}'", mw.file.display());
                         midq.push_back(n);
                     }
                     Node::Endpoint(_, _) => {

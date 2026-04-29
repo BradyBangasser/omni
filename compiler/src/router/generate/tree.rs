@@ -1,4 +1,4 @@
-use std::{collections::HashMap, error::Error, path::PathBuf};
+use std::{collections::HashMap, error::Error};
 
 use base::types::http::Method;
 
@@ -11,16 +11,12 @@ use crate::{
     },
 };
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct GenRoute {
     path: String,
     // HTTP bitmap with stack id, which will be the same as the path and method
     stack: im::Vector<(Method, String)>,
-
     // TODO: Add error handling into stacks
-
-    // HTTP Accept bitmap
-    accept: Method,
 }
 
 impl GenRoute {
@@ -28,7 +24,6 @@ impl GenRoute {
         Self {
             path,
             stack: im::Vector::new(),
-            accept: Method::empty(),
         }
     }
 
@@ -36,8 +31,8 @@ impl GenRoute {
         &mut self.stack
     }
 
-    pub fn accept_method(&mut self, m: Method) {
-        self.accept |= m
+    pub fn get_stacks(&self) -> &im::Vector<(Method, String)> {
+        &self.stack
     }
 
     pub fn get_path(&self) -> &str {
@@ -45,7 +40,7 @@ impl GenRoute {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct GenNode {
     pub condition: Option<ConditionType>,
     pub children: im::Vector<GenNode>,
@@ -110,6 +105,7 @@ impl GenTree {
             gn.children.push_back(Self::_from_cond_node_r(ctx, sg, n)?);
         }
 
+        sg.generate_build(ctx)?;
         Ok(GenTree { node: gn })
     }
 }

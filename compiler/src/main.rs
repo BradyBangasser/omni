@@ -5,17 +5,17 @@ mod languages;
 mod router;
 mod treemap;
 
-use std::io::stdout;
+use std::fs::OpenOptions;
+use std::io::{Write, stdout};
 use std::path::Path;
 
-use crate::languages::adapter::OutAdapter;
+use crate::languages::adapter::{OutAdapter, OutWriteContext};
 use crate::languages::go::GoAdapter;
 use crate::languages::rust::RustAdapter;
-use crate::router::generate::Generator;
 use crate::router::generate::stack::StackGenerator;
 use crate::router::generate::tree::GenTree;
+use crate::router::pass;
 use crate::router::tree::condition::ConditionTree;
-use crate::router::{generate, pass};
 use crate::{ctx::OmnicomCtx, treemap::walk_routes};
 
 fn main() {
@@ -38,5 +38,15 @@ fn main() {
 
     let gentree = GenTree::from_cond_tree(&mut ctx, &mut sg, &mut tree).unwrap();
     let mut ra = RustAdapter::default();
-    ra.generate(&mut ctx, &mut stdout(), &gentree).unwrap();
+
+    let mut d = ctx.get_lib().to_path_buf();
+    d.push("mod.rs");
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(&d)
+        .unwrap();
+
+    ra.generate(&mut ctx, &mut file, &gentree).unwrap();
 }

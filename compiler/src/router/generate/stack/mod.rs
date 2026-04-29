@@ -1,21 +1,23 @@
 use bimap::BiHashMap;
 use chrono::Utc;
 use const_hex::encode;
-use log::{trace, warn};
+use log::{debug, info, trace, warn};
 use sha3::{Digest, Sha3_256};
 use std::fmt::Write as FmtWrite;
 use std::fs::OpenOptions;
 use std::io::Write as IoWrite;
 use std::{error::Error, fs};
 
-use crate::languages::adapter::AdapterStackCtx;
-use crate::router::generate::indent_fn;
-use crate::router::generate::tree::GenRoute;
+use crate::languages::adapter::{AdapterEmit, AdapterStackCtx};
+use crate::router::generate::{indent_fn, tree::GenRoute};
 use crate::{build::OmniBuilder, ctx::OmnicomCtx, languages::adapter::InAdapter, router::Route};
 
 pub struct StackGenerator {
     builder: OmniBuilder,
-    adapters: Vec<Box<dyn InAdapter>>,
+    adapters: Vec<(
+        Box<dyn InAdapter>,
+        std::collections::HashMap<String, Vec<AdapterEmit>>,
+    )>,
     pregen_plugins: Vec<String>,
     postgen_plugins: Vec<String>,
 }
@@ -26,7 +28,8 @@ impl StackGenerator {
     }
 
     pub fn register_adapter(&mut self, adapter: Box<dyn InAdapter>) {
-        self.adapters.push(adapter);
+        self.adapters
+            .push((adapter, std::collections::HashMap::new()));
     }
 
     pub fn generate_stack(
@@ -48,15 +51,17 @@ impl StackGenerator {
 
         let mut middleware_count = 0;
 
+        let mut adapter_ids: Vec<(usize, AdapterEmit)> = vec![];
+
         for c in &r.chain {
             if c.is_middleware() {
                 middleware_count += 1;
             }
 
-            let adapter = self
+            let adapter_id = self
                 .adapters
                 .iter_mut()
-                .find(|a| a.handles(c.get_src_path()))
+                .position(|a| a.0.handles(c.get_src_path()))
                 .ok_or_else(|| {
                     format!(
                         "Missing LanguageAdaptor for source path: {}",
@@ -64,24 +69,26 @@ impl StackGenerator {
                     )
                 })?;
 
-            adapter.configure_build(ctx, &mut self.builder);
+            let adapter = self.adapters.get_mut(adapter_id).unwrap();
 
             indent_fn(indent, &mut gencode)?;
+
             writeln!(
                 gencode,
                 "// Generated via {} V{}",
-                adapter.get_name(),
-                adapter.get_version()
+                adapter.0.get_name(),
+                adapter.0.get_version()
             )?;
 
-            let (i, em) = adapter.emit(ctx, &mut gencode, &mut actx, indent, c)?;
+            let (i, em) = adapter.0.emit(ctx, &mut gencode, &mut actx, indent, c)?;
             indent = i;
             hasher.update(em.get_hash());
-            emits.push((c, em));
+            emits.push((adapter_id, c, em));
         }
 
         let stack_hash = encode(hasher.finalize());
-        let stack_id = stack_hash[..16].to_string();
+        let mut stack_id = String::from("SR");
+        stack_id.push_str(&stack_hash[..16]);
 
         trace!("Generating stack {}", stack_id);
 
@@ -106,7 +113,9 @@ impl StackGenerator {
 |                                                                              |"#;
 
         writeln!(&mut header, "{}", logo)?;
+
         write_row(&mut header, "")?;
+
         writeln!(
             &mut header,
             "|------------------------------------------------------------------------------|"
@@ -208,7 +217,7 @@ impl StackGenerator {
 
         write_row(&mut header, " --- GENERATION ARTIFACTS ---")?;
 
-        for (idx, (n, e)) in emits.iter().enumerate() {
+        for (idx, (_, n, e)) in emits.iter().enumerate() {
             let n_type = if n.is_middleware() { "MID" } else { "END" };
 
             write_row(
@@ -234,21 +243,36 @@ impl StackGenerator {
         if !actx.ffi.is_empty() {
             writeln!(&mut header, "extern \"C\" {{")?;
 
-            for f in actx.ffi {
+            for f in &actx.ffi {
                 writeln!(&mut header, "    {};", f)?;
             }
 
             writeln!(&mut header, "}}")?;
         }
 
-        writeln!(&mut header, "\npub fn {}() {{", stack_id)?;
+        writeln!(&mut header, "\npub fn __s_{}() {{", stack_id)?;
         writeln!(&mut gencode, "}}")?;
 
-        let mut d = ctx.get_bin().to_path_buf();
+        let mut d = ctx.get_lib().to_path_buf();
 
         d.push(stack_id.clone());
 
         fs::create_dir_all(&d)?;
+
+        for ctx_file in actx.get_files() {
+            d.push(ctx_file.0);
+            debug!("Creating Context File: {}", d.display());
+
+            let mut file = OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .open(&d)?;
+
+            file.write_all(ctx_file.1)?;
+
+            d.pop();
+        }
 
         d.push("mod.rs");
 
@@ -266,8 +290,39 @@ impl StackGenerator {
         file.write_all(b"\n")?;
         file.write_all(&gencode)?;
 
+        emits.iter().for_each(|emit| {
+            self.adapters
+                .get_mut(emit.0)
+                .unwrap()
+                .1
+                .entry(stack_id.clone())
+                .or_insert_with(Vec::new)
+                .push(emit.2.clone());
+        });
+
         gr.get_stack_mut().push_back((r.method, stack_id));
-        gr.accept_method(r.method);
+
+        Ok(())
+    }
+
+    pub fn generate_build(&mut self, ctx: &mut OmnicomCtx) -> Result<(), Box<dyn Error>> {
+        trace!("Configuring stack build files...");
+        for a in &mut self.adapters {
+            if !a.1.is_empty() {
+                info!(
+                    "Generating build files for {}@{}",
+                    a.0.get_name(),
+                    a.0.get_version()
+                );
+                a.0.configure_build(ctx, &mut self.builder, &a.1)?;
+            } else {
+                debug!(
+                    "Skipping {}@{}, no dependent stacks",
+                    a.0.get_name(),
+                    a.0.get_version()
+                );
+            }
+        }
 
         Ok(())
     }

@@ -11,7 +11,7 @@ use std::{
 };
 
 use base::types::http::Method;
-use log::{info, trace};
+use log::{info, trace, warn};
 use tree_sitter::Tree;
 
 use crate::ast::{self, get_func_params};
@@ -121,7 +121,7 @@ impl Node {
             let params = get_func_params(f.declaration, &src);
 
             if params.is_empty() || params[0] != "OmniContext" {
-                println!(
+                warn!(
                     "{} is not a valid handler (Doesn't take OmniContext)",
                     f.name
                 );

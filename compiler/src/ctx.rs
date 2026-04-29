@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 pub struct OmnicomCtx {
     out: PathBuf,
     bin: PathBuf,
+    lib: PathBuf,
 }
 
 impl OmnicomCtx {
@@ -15,6 +16,10 @@ impl OmnicomCtx {
     pub fn get_bin(&self) -> &Path {
         &self.bin
     }
+
+    pub fn get_lib(&self) -> &Path {
+        &self.lib
+    }
 }
 
 impl Default for OmnicomCtx {
@@ -22,6 +27,7 @@ impl Default for OmnicomCtx {
         Self {
             out: PathBuf::from("./build"),
             bin: PathBuf::from("./build/bin"),
+            lib: PathBuf::from("./build/lib"),
         }
     }
 }
